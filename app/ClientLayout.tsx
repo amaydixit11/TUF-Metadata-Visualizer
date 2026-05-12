@@ -1,10 +1,9 @@
-'use client';
-
 import React from 'react';
 import { GlobalStyle } from './styles/global';
 import { Header, Container, Title, Footer, GitHubLink, HeaderContent } from './styles/components';
 import StyledComponentsRegistry from './registry';
 import { FaGithub } from 'react-icons/fa';
+import ErrorBoundary from './components/ErrorBoundary';
 
 export default function ClientLayout({
     children,
@@ -18,7 +17,7 @@ export default function ClientLayout({
                 <Container>
                     <HeaderContent>
                         <Title>TUF Repository Viewer</Title>
-                        <GitHubLink 
+                        <GitHubLink
                             href="https://github.com/DeshDeepakKant/TUF-Metadata-Visualizer"
                             target="_blank"
                             rel="noopener noreferrer"
@@ -30,7 +29,9 @@ export default function ClientLayout({
                 </Container>
             </Header>
             <Container>
-                {children}
+                <ErrorBoundary>
+                    {children}
+                </ErrorBoundary>
             </Container>
             <Footer>
                 <Container>
@@ -39,4 +40,4 @@ export default function ClientLayout({
             </Footer>
         </StyledComponentsRegistry>
     );
-} 
+}
