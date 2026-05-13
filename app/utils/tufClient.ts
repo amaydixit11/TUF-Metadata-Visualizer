@@ -444,7 +444,11 @@ export class TufRepository {
 
         // Helper to create the correct JSON link based on availability of remote URL
         const createJsonLink = (fileName: string, version?: number): string => {
-            if (this.remoteUrl) {
+            if (this.remoteUrl === 'rstuf-internal') {
+                // For internal mode, links must point to the proxy route so the browser can fetch them
+                const versionedFileName = version ? `${version}.${fileName}` : fileName;
+                return `/api/rstuf-metadata?file=${encodeURIComponent(versionedFileName)}`;
+            } else if (this.remoteUrl) {
                 // If we have a remote URL, use it for the JSON link
                 // Include version number in filename if available (for versioned files)
                 const versionedFileName = version ? `${version}.${fileName}` : fileName;

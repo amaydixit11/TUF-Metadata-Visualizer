@@ -17,6 +17,15 @@ export async function GET(request: Request) {
         );
     }
 
+    // SECURITY: Prevent path traversal attacks
+    // Ensure the filename doesn't contain path separators or '..'
+    if (fileName.includes('/') || fileName.includes('\\') || fileName.includes('..')) {
+        return NextResponse.json(
+            { error: 'Invalid filename provided' },
+            { status: 400 }
+        );
+    }
+
     if (!RSTUF_API_INTERNAL_URL) {
         console.error('RSTUF_API_INTERNAL_URL environment variable is not set');
         return NextResponse.json(
@@ -26,15 +35,12 @@ export async function GET(request: Request) {
     }
 
     try {
-        // Ensure the internal URL ends with a slash and the filename does not start with one
+        // Ensure the internal URL ends with a slash
         const baseUrl = RSTUF_API_INTERNAL_URL.endsWith('/')
             ? RSTUF_API_INTERNAL_URL
             : `${RSTUF_API_INTERNAL_URL}/`;
-        const cleanFileName = fileName.startsWith('/')
-            ? fileName.substring(1)
-            : fileName;
 
-        const targetUrl = `${baseUrl}${cleanFileName}`;
+        const targetUrl = `${baseUrl}${fileName}`;
 
         console.info(`Proxying request to RSTUF API: ${targetUrl}`);
 
@@ -43,6 +49,7 @@ export async function GET(request: Request) {
             headers: {
                 'Accept': 'application/json',
             },
+            signal: AbortSignal.timeout(5000), // 5 second timeout to prevent hanging
         });
 
         if (!response.ok) {
@@ -56,7 +63,14 @@ export async function GET(request: Request) {
         const data = await response.json();
         return NextResponse.json(data);
 
-    } catch (error) {
+    } catch (error: any) {
+        if (error.name === 'TimeoutError') {
+            console.error(`Timeout fetching ${fileName} from RSTUF API`);
+            return NextResponse.json(
+                { error: 'RSTUF API request timed out' },
+                { status: 504 }
+            );
+        }
         console.error(`Proxy error fetching ${fileName} from RSTUF API:`, error);
         return NextResponse.json(
             { error: 'Internal server error while proxying to RSTUF API' },
