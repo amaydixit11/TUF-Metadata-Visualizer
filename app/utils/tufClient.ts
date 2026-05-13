@@ -360,77 +360,45 @@ export class TufRepository {
                 throw new Error('Remote URL not provided');
             }
 
-            // First try direct access
-            let url = new URL(fileName, this.remoteUrl).toString();
-            console.log(`Fetching metadata from: ${url}`);
-            
+            let url: string;
+
+            // Check if we should use the internal RSTUF proxy
+            // We use a specific marker or check if the remoteUrl is meant to be internal
+            if (this.remoteUrl === 'rstuf-internal') {
+                url = `/api/rstuf-metadata?file=${encodeURIComponent(fileName)}`;
+                console.log(`Fetching metadata via RSTUF proxy: ${url}`);
+            } else {
+                url = new URL(fileName, this.remoteUrl).toString();
+                console.log(`Fetching metadata from: ${url}`);
+            }
+
             try {
-                const response = await fetch(url, { 
+                const response = await fetch(url, {
                     next: { revalidate: 0 }, // Don't cache the response
                     headers: {
                         'Accept': 'application/json'
                     }
                 });
-                
+
                 if (response.ok) {
                     const data = await response.json();
-                    console.log(`Successfully fetched ${fileName} from ${url}`);
+                    console.log(`Successfully fetched ${fileName}`);
                     return data;
                 }
-                
-                // If we got a CORS error or other issue, try using the proxy
+
                 console.warn(`Failed to fetch ${fileName} from ${url}: ${response.status} ${response.statusText}`);
-                
-                // Try the proxy
-                const parsedUrl = new URL(this.remoteUrl);
-                const proxyUrl = `/api/tuf-metadata?url=${encodeURIComponent(this.remoteUrl)}&file=${encodeURIComponent(fileName)}`;
-                
-                console.log(`Trying proxy: ${proxyUrl}`);
-                
-                const proxyResponse = await fetch(proxyUrl, {
-                    next: { revalidate: 0 }
-                });
-                
-                if (!proxyResponse.ok) {
-                    if (throwOnError) {
-                        throw new Error(`Failed to fetch ${fileName} through proxy: ${proxyResponse.status} ${proxyResponse.statusText}`);
-                    } else {
-                        return null;
-                    }
+
+                if (throwOnError) {
+                    throw new Error(`Failed to fetch ${fileName}: ${response.status} ${response.statusText}`);
+                } else {
+                    return null;
                 }
-                
-                const data = await proxyResponse.json();
-                console.log(`Successfully fetched ${fileName} through proxy`);
-                return data;
             } catch (error) {
                 console.warn(`Error fetching ${fileName} from ${url}:`, error);
-                
-                // Try another proxy approach - direct fetch might fail due to CORS
-                const fallbackProxyUrl = `/proxy/${new URL(url).host}${new URL(url).pathname}`;
-                console.log(`Trying fallback proxy: ${fallbackProxyUrl}`);
-                
-                try {
-                    const fallbackResponse = await fetch(fallbackProxyUrl, {
-                        next: { revalidate: 0 }
-                    });
-                    
-                    if (!fallbackResponse.ok) {
-                        if (throwOnError) {
-                            throw new Error(`Failed to fetch ${fileName} through fallback proxy: ${fallbackResponse.status} ${fallbackResponse.statusText}`);
-                        } else {
-                            return null;
-                        }
-                    }
-                    
-                    const data = await fallbackResponse.json();
-                    console.log(`Successfully fetched ${fileName} through fallback proxy`);
-                    return data;
-                } catch (fallbackError) {
-                    if (throwOnError) {
-                        throw new Error(`Failed to fetch ${fileName} through all methods: ${fallbackError instanceof Error ? fallbackError.message : String(fallbackError)}`);
-                    } else {
-                        return null;
-                    }
+                if (throwOnError) {
+                    throw error;
+                } else {
+                    return null;
                 }
             }
         } catch (error) {

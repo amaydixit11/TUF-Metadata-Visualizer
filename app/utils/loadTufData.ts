@@ -8,28 +8,35 @@ import path from 'path';
 // Function to load TUF data
 export async function loadTufData(remoteUrl?: string): Promise<{ roles: RoleInfo[], version: string, error: string | null }> {
     try {
-        // Check for metadata directory if no remoteUrl provided
-        if (!remoteUrl) {
+        // Determine if we should use the internal RSTUF proxy
+        // If no remoteUrl is provided, check if we are configured for RSTUF internal mode
+        let effectiveUrl = remoteUrl;
+
+        if (!effectiveUrl && process.env.RSTUF_API_INTERNAL_URL) {
+            effectiveUrl = 'rstuf-internal';
+        }
+
+        // Check for metadata directory if no remoteUrl and not in RSTUF mode
+        if (!effectiveUrl) {
             const metadataDir = path.join(process.cwd(), 'public', 'metadata');
             if (!fs.existsSync(metadataDir)) {
-                return { 
-                    roles: [], 
-                    version: process.env.VERSION || '0.1.0', 
+                return {
+                    roles: [],
+                    version: process.env.VERSION || '0.1.0',
                     error: `Metadata directory not found. Please provide a remote URL or create a directory at ${metadataDir}`
                 };
             }
-        } else {
-            // Validate the remote URL format
+        } else if (effectiveUrl !== 'rstuf-internal') {
+            // Validate the remote URL format for public repositories
             try {
-                // Test URL by attempting to fetch timestamp.json
-                const testUrl = new URL('timestamp.json', remoteUrl).toString();
+                const testUrl = new URL('timestamp.json', effectiveUrl).toString();
                 const response = await fetch(testUrl, { next: { revalidate: 0 } });
-                
+
                 if (!response.ok) {
                     return {
                         roles: [],
                         version: process.env.VERSION || '0.1.0',
-                        error: `Failed to fetch timestamp.json from ${remoteUrl}: ${response.status} ${response.statusText}`
+                        error: `Failed to fetch timestamp.json from ${effectiveUrl}: ${response.status} ${response.statusText}`
                     };
                 }
             } catch (urlError) {
@@ -40,20 +47,19 @@ export async function loadTufData(remoteUrl?: string): Promise<{ roles: RoleInfo
                 };
             }
         }
-        
-        const repository = await createTufRepository(remoteUrl);
+
+        const repository = await createTufRepository(effectiveUrl);
         const roles = repository.getRoleInfo();
-        
-        // Get version for display
+
         const version = process.env.VERSION || '0.1.0';
-        
+
         return { roles, version, error: null };
     } catch (error) {
         console.error('Error loading TUF data:', error);
-        return { 
-            roles: [], 
-            version: process.env.VERSION || '0.1.0', 
-            error: error instanceof Error ? error.message : String(error) 
+        return {
+            roles: [],
+            version: process.env.VERSION || '0.1.0',
+            error: error instanceof Error ? error.message : String(error)
         };
     }
 }
